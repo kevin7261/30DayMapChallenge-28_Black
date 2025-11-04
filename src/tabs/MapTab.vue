@@ -6,7 +6,7 @@
    * 主要功能：
    * - 使用 D3.js 顯示世界地圖
    * - 提供城市導航功能
-   * - 使用等積圓錐投影 (Conic Equal Area Projection)
+   * - 使用方位等距投影 (Azimuthal Equidistant Projection)
    * - 響應式設計
    *
    * 技術架構：
@@ -39,9 +39,9 @@
       // 🎨 顏色配置
       const colors = {
         participant: '#FFF100', // 黃色作為邦交國顏色 (RGB: 255, 241, 0)
-        other: '#1a1a1a', // 很深的灰色作為預設顏色
-        border: 'none', // 不顯示邊框
-        background: '#000000', // 黑色底圖
+        other: '#1a1a1a', // 深灰色作為國家顏色
+        border: '#ffffff', // 白色邊界
+        background: '#ffffff', // 白色底圖
       };
 
       // 🎛️ 地圖控制狀態
@@ -112,15 +112,17 @@
             .style('visibility', 'hidden')
             .style('z-index', '10');
 
-          // 創建投影 - 使用等積圓錐投影 (Conic Equal Area Projection)
-          // 將台灣地理中心的經度和緯度0度置於畫面正中心
-          const taiwanCenterLon = 120.9820246; // 台灣地理中心經度（東經120度58分55.2886秒）
+          // 創建投影 - 使用方位等距投影 (Azimuthal Equidistant Projection)
+          // 以北極為中心，中央經線為台灣地理中心的經線，台灣在下方
+          const taiwanCenterLon = 120.982025; // 台灣地理中心經度
           projection = d3
-            .geoConicEqualArea()
-            .center([taiwanCenterLon, 0]) // 台灣地理中心經度，緯度0度
-            .parallels([0, 60]) // 設置標準緯線
-            .translate([width / 2, height / 2]) // 將投影中心移到畫面正中心
-            .fitSize([width, height], worldData.value); // 使用世界地圖數據進行縮放
+            .geoAzimuthalEquidistant()
+            .rotate([-taiwanCenterLon, -90, 0]) // 以北極為中心（緯度-90），台灣經線為中央經線，台灣在下方
+            .clipAngle(180) // 顯示整個地球
+            .translate([width / 2, height / 2])
+            .fitSize([width, height], worldData.value); // 自動適配畫面大小
+          // fitSize 後需要重新設置 rotate
+          projection.rotate([-taiwanCenterLon, -90, 0]);
 
           // 創建路徑生成器
           path = d3.geoPath().projection(projection);
@@ -128,16 +130,16 @@
           // 創建容器組
           g = svg.append('g');
 
-          // 添加投影地圖外框 - 白色 stroke（立體投影的圓形邊界）
-          // 使用 geoGraticule 的 outline 獲取投影邊界
-          const graticule = d3.geoGraticule();
-          g.append('path')
-            .datum(graticule.outline())
-            .attr('d', path)
-            .attr('fill', 'none')
-            .attr('stroke', '#ffffff')
-            .attr('stroke-width', 1)
-            .attr('class', 'projection-border');
+          // 繪製海洋（黑色圓形背景）
+          // 使用 clipAngle(180) 時，地圖邊界是圓形，半徑等於 scale * π
+          const scale = projection.scale();
+          const oceanRadius = scale * Math.PI; // 180度 = π 弧度
+          g.append('circle')
+            .attr('cx', width / 2)
+            .attr('cy', height / 2)
+            .attr('r', oceanRadius)
+            .attr('fill', '#000000') // 黑色海洋
+            .attr('class', 'ocean');
 
           // 設置縮放行為（禁用所有互動）
           zoom = d3
@@ -176,8 +178,16 @@
         }
 
         try {
-          // 直接使用 GeoJSON 數據（無需轉換）
-          const countries = worldData.value;
+          // 過濾掉南極大陸，只顯示其他國家
+          const countries = {
+            ...worldData.value,
+            features: worldData.value.features.filter((feature) => {
+              const countryName =
+                feature.properties?.NAME || feature.properties?.ADMIN || feature.properties?.name;
+              // 過濾掉南極大陸
+              return countryName !== 'Antarctica';
+            }),
+          };
           console.log('[MapTab] 開始繪製地圖，國家數量:', countries.features?.length);
 
           // 繪製國家邊界
@@ -192,10 +202,10 @@
               // 嚴格使用 GeoJSON 提供的正式名稱（優先 NAME）
               const countryName = d.properties?.NAME || d.properties?.ADMIN || d.properties?.name;
               if (dataStore.isAlliedCountry(countryName)) return colors.participant;
-              return colors.other;
+              return colors.other; // 深灰色
             })
             .attr('stroke', (d) => {
-              // 只有台灣使用黃色 stroke 1px，其他國家不畫 stroke
+              // 只有台灣使用黃色邊框 1px，其他國家不畫邊界
               const countryName = d.properties?.NAME || d.properties?.ADMIN || d.properties?.name;
               return countryName === 'Taiwan' ? colors.participant : 'none';
             })
@@ -303,17 +313,23 @@
         svg.attr('width', width).attr('height', height);
 
         // 自動調整投影以適應新的容器尺寸
-        // 保持台灣地理中心的經度和緯度0度在畫面正中心
-        const taiwanCenterLon = 120.9820246; // 台灣地理中心經度
+        // 方位等距投影，中央經線為台灣地理中心的經線，台灣在下方
+        const taiwanCenterLon = 120.982025; // 台灣地理中心經度
         projection
-          .center([taiwanCenterLon, 0])
-          .parallels([0, 60])
+          .rotate([-taiwanCenterLon, -90, 0]) // 以北極為中心（緯度-90），台灣經線為中央經線，台灣在下方
+          .clipAngle(180) // 顯示整個地球
           .translate([width / 2, height / 2])
-          .fitSize([width, height], worldData.value);
+          .fitSize([width, height], worldData.value); // 自動適配畫面大小
+        // fitSize 後需要重新設置 rotate
+        projection.rotate([-taiwanCenterLon, -90, 0]);
 
-        // 更新投影地圖外框
-        const graticule = d3.geoGraticule();
-        g.select('.projection-border').datum(graticule.outline()).attr('d', path);
+        // 更新海洋（黑色圓形背景）
+        const scale = projection.scale();
+        const oceanRadius = scale * Math.PI; // 180度 = π 弧度
+        g.select('.ocean')
+          .attr('cx', width / 2)
+          .attr('cy', height / 2)
+          .attr('r', oceanRadius);
 
         // 更新所有路徑
         g.selectAll('path.country').attr('d', path);
