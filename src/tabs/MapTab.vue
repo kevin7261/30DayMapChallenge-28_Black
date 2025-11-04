@@ -6,7 +6,7 @@
    * 主要功能：
    * - 使用 D3.js 顯示世界地圖
    * - 提供城市導航功能
-   * - 使用麥卡托投影 (Mercator Projection)
+   * - 使用 Bromley 投影 (Bromley Projection)
    * - 響應式設計
    *
    * 技術架構：
@@ -18,6 +18,7 @@
 
   import { ref, onMounted, onUnmounted, nextTick } from 'vue';
   import * as d3 from 'd3';
+  import * as d3GeoProjection from 'd3-geo-projection';
   import { useDataStore } from '@/stores/dataStore.js';
 
   export default {
@@ -38,10 +39,10 @@
 
       // 🎨 顏色配置
       const colors = {
-        participant: '#FFD700', // 黃色作為邦交國顏色
+        participant: '#FFF100', // 黃色作為邦交國顏色 (RGB: 255, 241, 0)
         other: '#1a1a1a', // 很深的灰色作為預設顏色
         border: 'none', // 不顯示邊框
-        background: '#2a2a2a', // 海洋比國家淺一點的灰色
+        background: '#000000', // 純黑色底圖
       };
 
       // 🎛️ 地圖控制狀態
@@ -112,37 +113,8 @@
             .style('visibility', 'hidden')
             .style('z-index', '10');
 
-          // 創建投影 - 使用麥卡托投影 (Mercator Projection)
-          // 限制顯示範圍到北緯75度、南緯65度
-          const northLatLimit = 75; // 北緯限制
-          const southLatLimit = -65; // 南緯限制
-
-          // 創建限制範圍的 GeoJSON（北緯75度、南緯65度）
-          const limitedBounds = {
-            type: 'FeatureCollection',
-            features: [
-              {
-                type: 'Feature',
-                geometry: {
-                  type: 'Polygon',
-                  coordinates: [
-                    [
-                      [-180, southLatLimit],
-                      [180, southLatLimit],
-                      [180, northLatLimit],
-                      [-180, northLatLimit],
-                      [-180, southLatLimit],
-                    ],
-                  ],
-                },
-              },
-            ],
-          };
-
-          projection = d3
-            .geoMercator()
-            .center([0, 0]) // 以旋轉後的中央經線與赤道交點為中心
-            .fitSize([width, height], limitedBounds); // 使用限制範圍進行縮放
+          // 創建投影 - 使用 Bromley 投影 (Bromley Projection)
+          projection = d3GeoProjection.geoBromley().fitSize([width, height], worldData.value); // 使用世界地圖數據進行縮放
 
           // 創建路徑生成器
           path = d3.geoPath().projection(projection);
@@ -205,7 +177,16 @@
               if (dataStore.isAlliedCountry(countryName)) return colors.participant;
               return colors.other;
             })
-            .attr('stroke', 'none')
+            .attr('stroke', (d) => {
+              // 只有台灣使用黃色 stroke 1px，其他國家不畫 stroke
+              const countryName = d.properties?.NAME || d.properties?.ADMIN || d.properties?.name;
+              return countryName === 'Taiwan' ? colors.participant : 'none';
+            })
+            .attr('stroke-width', (d) => {
+              // 只有台灣有 stroke-width，其他國家為 0
+              const countryName = d.properties?.NAME || d.properties?.ADMIN || d.properties?.name;
+              return countryName === 'Taiwan' ? 1 : 0;
+            })
             .attr('class', 'country')
             .style('cursor', 'pointer');
 
@@ -304,30 +285,8 @@
 
         svg.attr('width', width).attr('height', height);
 
-        // 自動調整投影以適應新的容器尺寸（限制到北緯75度、南緯65度）
-        const northLatLimit = 75; // 北緯限制
-        const southLatLimit = -60; // 南緯限制
-        const limitedBounds = {
-          type: 'FeatureCollection',
-          features: [
-            {
-              type: 'Feature',
-              geometry: {
-                type: 'Polygon',
-                coordinates: [
-                  [
-                    [-180, southLatLimit],
-                    [180, southLatLimit],
-                    [180, northLatLimit],
-                    [-180, northLatLimit],
-                    [-180, southLatLimit],
-                  ],
-                ],
-              },
-            },
-          ],
-        };
-        projection.fitSize([width, height], limitedBounds);
+        // 自動調整投影以適應新的容器尺寸
+        projection.fitSize([width, height], worldData.value);
 
         // 更新所有路徑
         g.selectAll('path.country').attr('d', path);

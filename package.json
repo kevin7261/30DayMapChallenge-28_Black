@@ -19,6 +19,7 @@
     "bootstrap": "^5.3.0",
     "core-js": "^3.8.3",
     "d3": "^7.8.0",
+    "d3-geo-projection": "^4.0.0",
     "pinia": "^2.1.0",
     "proj4": "^2.17.0",
     "sortablejs": "^1.15.6",
@@ -46,7 +47,10 @@
       "node": true,
       "es2022": true
     },
-    "extends": ["plugin:vue/vue3-essential", "eslint:recommended"],
+    "extends": [
+      "plugin:vue/vue3-essential",
+      "eslint:recommended"
+    ],
     "parserOptions": {
       "parser": "@babel/eslint-parser",
       "requireConfigFile": false,
@@ -60,5 +64,10 @@
       "vue/multi-word-component-names": "off"
     }
   },
-  "browserslist": ["> 1%", "last 2 versions", "not dead", "not ie 11"]
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead",
+    "not ie 11"
+  ]
 }
