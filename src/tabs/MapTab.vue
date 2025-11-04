@@ -6,7 +6,7 @@
    * 主要功能：
    * - 使用 D3.js 顯示世界地圖
    * - 提供城市導航功能
-   * - 使用 Bromley 投影 (Bromley Projection)
+   * - 使用等積圓錐投影 (Conic Equal Area Projection)
    * - 響應式設計
    *
    * 技術架構：
@@ -18,7 +18,6 @@
 
   import { ref, onMounted, onUnmounted, nextTick } from 'vue';
   import * as d3 from 'd3';
-  import * as d3GeoProjection from 'd3-geo-projection';
   import { useDataStore } from '@/stores/dataStore.js';
 
   export default {
@@ -42,7 +41,7 @@
         participant: '#FFF100', // 黃色作為邦交國顏色 (RGB: 255, 241, 0)
         other: '#1a1a1a', // 很深的灰色作為預設顏色
         border: 'none', // 不顯示邊框
-        background: '#000000', // 純黑色底圖
+        background: '#000000', // 黑色底圖
       };
 
       // 🎛️ 地圖控制狀態
@@ -113,14 +112,32 @@
             .style('visibility', 'hidden')
             .style('z-index', '10');
 
-          // 創建投影 - 使用 Bromley 投影 (Bromley Projection)
-          projection = d3GeoProjection.geoBromley().fitSize([width, height], worldData.value); // 使用世界地圖數據進行縮放
+          // 創建投影 - 使用等積圓錐投影 (Conic Equal Area Projection)
+          // 將台灣地理中心的經度和緯度0度置於畫面正中心
+          const taiwanCenterLon = 120.9820246; // 台灣地理中心經度（東經120度58分55.2886秒）
+          projection = d3
+            .geoConicEqualArea()
+            .center([taiwanCenterLon, 0]) // 台灣地理中心經度，緯度0度
+            .parallels([0, 60]) // 設置標準緯線
+            .translate([width / 2, height / 2]) // 將投影中心移到畫面正中心
+            .fitSize([width, height], worldData.value); // 使用世界地圖數據進行縮放
 
           // 創建路徑生成器
           path = d3.geoPath().projection(projection);
 
           // 創建容器組
           g = svg.append('g');
+
+          // 添加投影地圖外框 - 白色 stroke（立體投影的圓形邊界）
+          // 使用 geoGraticule 的 outline 獲取投影邊界
+          const graticule = d3.geoGraticule();
+          g.append('path')
+            .datum(graticule.outline())
+            .attr('d', path)
+            .attr('fill', 'none')
+            .attr('stroke', '#ffffff')
+            .attr('stroke-width', 1)
+            .attr('class', 'projection-border');
 
           // 設置縮放行為（禁用所有互動）
           zoom = d3
@@ -286,7 +303,17 @@
         svg.attr('width', width).attr('height', height);
 
         // 自動調整投影以適應新的容器尺寸
-        projection.fitSize([width, height], worldData.value);
+        // 保持台灣地理中心的經度和緯度0度在畫面正中心
+        const taiwanCenterLon = 120.9820246; // 台灣地理中心經度
+        projection
+          .center([taiwanCenterLon, 0])
+          .parallels([0, 60])
+          .translate([width / 2, height / 2])
+          .fitSize([width, height], worldData.value);
+
+        // 更新投影地圖外框
+        const graticule = d3.geoGraticule();
+        g.select('.projection-border').datum(graticule.outline()).attr('d', path);
 
         // 更新所有路徑
         g.selectAll('path.country').attr('d', path);
