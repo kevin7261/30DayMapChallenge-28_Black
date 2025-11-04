@@ -256,7 +256,7 @@
             .attr('class', 'micro-state-marker')
             .attr('cx', (d) => projection(d.coordinates)[0])
             .attr('cy', (d) => projection(d.coordinates)[1])
-            .attr('r', 3) // 圓圈半徑
+            .attr('r', 2) // 圓圈半徑 2px
             .attr('fill', (d) => {
               // 檢查微型國家顏色：邦交國使用黃色，其他國家使用深灰色
               if (dataStore.isAlliedCountry(d.name)) return colors.participant;
